@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Scheduled Reveal</title>
+<style>
+  body{
+    font-family: system-ui, sans-serif;
+    padding:20px;
+    max-width:900px;
+    margin:auto;
+    min-height:100vh;
+    background: url('https://images.unsplash.com/photo-1507525428034-b723cf961d3e') no-repeat center center fixed;
+    background-size: cover;
+    transition: background 0.5s ease;
+    display:flex;
+    flex-direction:column;
+    justify-content:flex-start;
+  }
+  .overlay{
+    position:fixed;
+    top:0;
+    left:0;
+    width:100%;
+    height:100%;
+    background: rgba(255,255,255,0.7);
+    z-index:-1;
+  }
+  .card{
+    background: rgba(255,255,255,0.95);
+    border:1px solid #ddd;
+    border-radius:12px;
+    padding:20px;
+    margin-bottom:16px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+  }
+  .card:hover{
+    transform: translateY(-4px);
+    box-shadow: 0 12px 28px rgba(0,0,0,0.2);
+  }
+  button{
+    padding:10px 16px;
+    border-radius:8px;
+    border:none;
+    background:#0b76ef;
+    color:white;
+    font-weight:600;
+    cursor:pointer;
+    margin-top:10px;
+    transition: background 0.3s ease;
+  }
+  button:hover{
+    background:#095bb5;
+  }
+  input,textarea{
+    padding:10px;
+    border-radius:6px;
+    border:1px solid #ccc;
+    width:100%;
+    margin-top:6px;
+    font-size:14px;
+    transition: border 0.3s ease;
+  }
+  input:focus, textarea:focus{
+    border-color:#0b76ef;
+    outline:none;
+  }
+  .muted{color:#666;font-size:13px}
+  h2{margin-bottom:12px}
+</style>
+</head>
+<body>
+<div class="overlay"></div>
+
+<div id="role-selection" class="card">
+  <div style="margin-bottom:16px;font-size:18px;font-weight:600;">まずあなたは管理者ですか？</div>
+  <button id='choose-admin'>はい（管理者）</button>
+  <button id='choose-viewer' style='margin-left:8px;'>いいえ（閲覧者）</button>
+</div>
+
+<div id="password-panel" class="card" style="display:none;">
+  <div style="margin-bottom:10px;">管理者パスワードを入力してください</div>
+  <input type="password" id="admin-pass-input" placeholder="パスワード">
+  <button id="submit-pass">確認</button>
+</div>
+
+<div id="main-content" style="display:none;">
+  <h1 style="text-align:center; color:#fff; text-shadow: 1px 1px 2px #000;">情報を公開する</h1>
+  <div class="card" id="admin-panel">
+    <label>テキスト</label>
+    <textarea id="secret" rows="4" placeholder="ここにテキストを入力"></textarea>
+    <label>画像・動画のURL（任意）</label>
+    <input id="media-url" type="text" placeholder="例: https://example.com/image.jpg">
+    <label>リンク（任意）</label>
+    <input id="link-url" type="text" placeholder="例: https://example.com">
+    <label>公開日時（ローカル）</label>
+    <input id="dt" type="datetime-local">
+    <div class="muted">※ブラウザのローカル時間で判定します</div>
+    <div class="row">
+      <button id="save">スケジュール保存</button>
+    </div>
+  </div>
+  <div class="card">
+    <h3>スケジュール一覧</h3>
+    <div id="list">（まだ登録されていません）</div>
+  </div>
+</div>
+
+<script>
+const ADMIN_PASS = 'nfwatty1229';
+const roleSelection = document.getElementById('role-selection');
+const passwordPanel = document.getElementById('password-panel');
+const mainContent = document.getElementById('main-content');
+const adminPanel = document.getElementById('admin-panel');
+
+let storage = JSON.parse(localStorage.getItem('scheduled_reveals')||'[]');
+
+function renderList(){
+  const container = document.getElementById('list');
+  container.innerHTML = '';
+  if(storage.length === 0){ container.innerHTML = '（まだ登録されていません）'; return; }
+  storage.forEach(e=>{
+    const div = document.createElement('div');
+    div.className = 'card';
+    div.style.transition='all 0.3s ease';
+    let html = `<strong>公開日時:</strong> ${e.when}<br>`;
+    html += e.text ? `<p>${e.text}</p>` : '';
+    if(e.media) html += `<img src='${e.media}' style='max-width:100%;margin-top:4px;border-radius:8px;'><br>`;
+    if(e.link) html += `<a href='${e.link}' target='_blank'>リンクはこちら</a><br>`;
+    div.innerHTML = html;
+    container.appendChild(div);
+  });
+}
+
+document.getElementById('save').addEventListener('click', ()=>{
+  const text = document.getElementById('secret').value.trim();
+  const media = document.getElementById('media-url').value.trim();
+  const link = document.getElementById('link-url').value.trim();
+  const dt = document.getElementById('dt').value;
+  if(!dt){ alert('公開日時を指定してください'); return; }
+  storage.push({text, media, link, when: dt});
+  localStorage.setItem('scheduled_reveals', JSON.stringify(storage));
+  document.getElementById('secret').value='';
+  document.getElementById('media-url').value='';
+  document.getElementById('link-url').value='';
+  renderList();
+});
+
+document.getElementById('choose-admin').addEventListener('click', ()=>{
+  roleSelection.style.display = 'none';
+  passwordPanel.style.display = 'block';
+});
+
+document.getElementById('choose-viewer').addEventListener('click', ()=>{
+  roleSelection.style.display = 'none';
+  mainContent.style.display = 'block';
+  adminPanel.style.display = 'none';
+  sessionStorage.setItem('isAdmin','no');
+});
+
+document.getElementById('submit-pass').addEventListener('click', ()=>{
+  const input = document.getElementById('admin-pass-input').value;
+  if(input === ADMIN_PASS){
+    sessionStorage.setItem('isAdmin','yes');
+    passwordPanel.style.display = 'none';
+    mainContent.style.display = 'block';
+    adminPanel.style.display = 'block';
+  } else {
+    alert('パスワードが違います');
+    sessionStorage.setItem('isAdmin','no');
+    passwordPanel.style.display = 'none';
+    mainContent.style.display = 'block';
+    adminPanel.style.display = 'none';
+  }
+});
+
+window.addEventListener('load', renderList);
+</script>
+
+</body>
+</html>
