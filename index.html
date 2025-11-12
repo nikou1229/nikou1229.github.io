@@ -5,79 +5,61 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Scheduled Reveal</title>
 <style>
-  body{
+  body {
     font-family: system-ui, sans-serif;
-    padding:20px;
-    max-width:900px;
-    margin:auto;
-    min-height:100vh;
-    background: url('https://images.unsplash.com/photo-1507525428034-b723cf961d3e') no-repeat center center fixed;
-    background-size: cover;
-    transition: background 0.5s ease;
-    display:flex;
-    flex-direction:column;
-    justify-content:flex-start;
+    padding: 20px;
+    max-width: 900px;
+    margin: auto;
+    background: url('your-background.jpg') no-repeat center center / cover;
+    color: #222;
   }
-  .overlay{
-    position:fixed;
-    top:0;
-    left:0;
-    width:100%;
-    height:100%;
-    background: rgba(255,255,255,0.7);
-    z-index:-1;
+  .overlay {
+    background: rgba(255,255,255,0.75);
+    padding: 20px;
+    border-radius: 20px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.1);
+    backdrop-filter: blur(6px);
   }
-  .card{
-    background: rgba(255,255,255,0.95);
-    border:1px solid #ddd;
-    border-radius:12px;
-    padding:20px;
-    margin-bottom:16px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.1);
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
+  .card {
+    border: 1px solid #ddd;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.05);
+    background: rgba(255,255,255,0.85);
+    transition: all 0.3s ease;
   }
-  .card:hover{
-    transform: translateY(-4px);
-    box-shadow: 0 12px 28px rgba(0,0,0,0.2);
+  .card:hover { transform: translateY(-4px); box-shadow: 0 8px 20px rgba(0,0,0,0.1); }
+  button {
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: none;
+    background: #0b76ef;
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 10px;
+    transition: 0.2s;
   }
-  button{
-    padding:10px 16px;
-    border-radius:8px;
-    border:none;
-    background:#0b76ef;
-    color:white;
-    font-weight:600;
-    cursor:pointer;
-    margin-top:10px;
-    transition: background 0.3s ease;
+  button:hover { background: #005ed0; }
+  input, textarea {
+    padding: 8px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    width: 100%;
+    margin-top: 6px;
   }
-  button:hover{
-    background:#095bb5;
-  }
-  input,textarea{
-    padding:10px;
-    border-radius:6px;
-    border:1px solid #ccc;
-    width:100%;
-    margin-top:6px;
-    font-size:14px;
-    transition: border 0.3s ease;
-  }
-  input:focus, textarea:focus{
-    border-color:#0b76ef;
-    outline:none;
-  }
-  .muted{color:#666;font-size:13px}
-  h2{margin-bottom:12px}
+  h2 { margin-bottom: 8px; }
+  .muted { color: #666; font-size: 13px; }
 </style>
 </head>
 <body>
-<div class="overlay"></div>
+<div class="overlay">
 
 <div id="role-selection" class="card">
   <div style="margin-bottom:16px;font-size:18px;font-weight:600;">まずあなたは管理者ですか？</div>
-  <button id='choose-admin'>はい（管理者）</button>
-  <button id='choose-viewer' style='margin-left:8px;'>いいえ（閲覧者）</button>
+  <button id="choose-admin">はい（管理者）</button>
+  <button id="choose-viewer" style="margin-left:8px;">いいえ（閲覧者）</button>
 </div>
 
 <div id="password-panel" class="card" style="display:none;">
@@ -87,7 +69,8 @@
 </div>
 
 <div id="main-content" style="display:none;">
-  <h1 style="text-align:center; color:#fff; text-shadow: 1px 1px 2px #000;">情報公開</h1>
+  <h1>時間指定で情報を公開する小アプリ</h1>
+
   <div class="card" id="admin-panel">
     <label>テキスト</label>
     <textarea id="secret" rows="4" placeholder="ここにテキストを入力"></textarea>
@@ -98,102 +81,127 @@
     <label>公開日時（ローカル）</label>
     <input id="dt" type="datetime-local">
     <div class="muted">※ブラウザのローカル時間で判定します</div>
-    <div class="row">
-      <button id="save">スケジュール保存</button>
-    </div>
+    <button id="save">スケジュール保存</button>
   </div>
+
   <div class="card">
     <h3>スケジュール一覧</h3>
     <div id="list">（まだ登録されていません）</div>
   </div>
 </div>
 
+</div>
 <script>
 const ADMIN_PASS = 'nfwatty1229';
-const roleSelection = document.getElementById('role-selection');
-const passwordPanel = document.getElementById('password-panel');
-const mainContent = document.getElementById('main-content');
+const roleSel = document.getElementById('role-selection');
+const passPanel = document.getElementById('password-panel');
+const main = document.getElementById('main-content');
 const adminPanel = document.getElementById('admin-panel');
+const listContainer = document.getElementById('list');
+let storage = JSON.parse(localStorage.getItem('scheduled_reveals') || '[]');
+let isAdmin = false;
 
-let storage = JSON.parse(localStorage.getItem('scheduled_reveals')||'[]');
-
-function renderList(){
-  const container = document.getElementById('list');
-  container.innerHTML = '';
-  const isAdmin = sessionStorage.getItem('isAdmin') === 'yes';
+// ====== Render ======
+function renderList() {
+  listContainer.innerHTML = '';
+  if (storage.length === 0) {
+    listContainer.textContent = '（まだ登録されていません）';
+    return;
+  }
 
   const now = new Date();
-  const filtered = storage.filter(e=>isAdmin || new Date(e.when) <= now);
+  storage.forEach((e, i) => {
+    const revealTime = new Date(e.when);
+    const isRevealed = revealTime <= now;
 
-  if(filtered.length === 0){ container.innerHTML = '（まだ登録されていません）'; return; }
+    // 閲覧者は非公開の情報を見ない
+    if (!isAdmin && !isRevealed) return;
 
-  filtered.forEach((e, idx)=>{
     const div = document.createElement('div');
     div.className = 'card';
-    div.style.transition='all 0.3s ease';
     let html = `<strong>公開日時:</strong> ${e.when}<br>`;
     html += e.text ? `<p>${e.text}</p>` : '';
-    if(e.media) html += `<img src='${e.media}' style='max-width:100%;margin-top:4px;border-radius:8px;'><br>`;
-    if(e.link) html += `<a href='${e.link}' target='_blank'>リンクはこちら</a><br>`;
-    if(isAdmin){
-      html += `<button onclick='deleteEntry(${idx})' style='background:#b00'>削除</button>`;
+    if (e.media) {
+      if (e.media.match(/\\.(mp4|webm|ogg)$/)) {
+        html += `<video src='${e.media}' controls style='max-width:100%;margin-top:4px'></video>`;
+      } else {
+        html += `<img src='${e.media}' style='max-width:100%;margin-top:4px'>`;
+      }
+    }
+    if (e.link) html += `<br><a href='${e.link}' target='_blank'>リンクはこちら</a>`;
+    if (isAdmin) {
+      html += `<br><button data-idx='${i}' class='del-btn' style='background:#e74c3c;'>削除</button>`;
     }
     div.innerHTML = html;
-    container.appendChild(div);
+    listContainer.appendChild(div);
   });
+
+  if (isAdmin) {
+    document.querySelectorAll('.del-btn').forEach(btn => {
+      btn.addEventListener('click', (ev) => {
+        const idx = ev.target.dataset.idx;
+        if (confirm('このスケジュールを削除しますか？')) {
+          storage.splice(idx, 1);
+          localStorage.setItem('scheduled_reveals', JSON.stringify(storage));
+          renderList();
+        }
+      });
+    });
+  }
+
+  if (listContainer.innerHTML === '') listContainer.textContent = '（まだ公開されていません）';
 }
 
-document.getElementById('save').addEventListener('click', ()=>{
+// ====== Save ======
+document.getElementById('save').addEventListener('click', () => {
   const text = document.getElementById('secret').value.trim();
   const media = document.getElementById('media-url').value.trim();
   const link = document.getElementById('link-url').value.trim();
   const dt = document.getElementById('dt').value;
-  if(!dt){ alert('公開日時を指定してください'); return; }
-  storage.push({text, media, link, when: dt});
+  if (!dt) return alert('公開日時を指定してください');
+  storage.push({ text, media, link, when: dt });
   localStorage.setItem('scheduled_reveals', JSON.stringify(storage));
-  document.getElementById('secret').value='';
-  document.getElementById('media-url').value='';
-  document.getElementById('link-url').value='';
-  renderList();
+
+  document.getElementById('secret').value = '';
+  document.getElementById('media-url').value = '';
+  document.getElementById('link-url').value = '';
+  document.getElementById('dt').value = '';
+
+  renderList(); // 即更新（管理者なので全表示）
 });
 
-function deleteEntry(idx){
-  storage.splice(idx,1);
-  localStorage.setItem('scheduled_reveals', JSON.stringify(storage));
-  renderList();
-}
-
-document.getElementById('choose-admin').addEventListener('click', ()=>{
-  roleSelection.style.display = 'none';
-  passwordPanel.style.display = 'block';
+// ====== Role Selection ======
+document.getElementById('choose-admin').addEventListener('click', () => {
+  roleSel.style.display = 'none';
+  passPanel.style.display = 'block';
 });
-
-document.getElementById('choose-viewer').addEventListener('click', ()=>{
-  roleSelection.style.display = 'none';
-  mainContent.style.display = 'block';
+document.getElementById('choose-viewer').addEventListener('click', () => {
+  isAdmin = false;
+  roleSel.style.display = 'none';
+  main.style.display = 'block';
   adminPanel.style.display = 'none';
-  sessionStorage.setItem('isAdmin','no');
+  renderList();
 });
 
-document.getElementById('submit-pass').addEventListener('click', ()=>{
-  const input = document.getElementById('admin-pass-input').value;
-  if(input === ADMIN_PASS){
-    sessionStorage.setItem('isAdmin','yes');
-    passwordPanel.style.display = 'none';
-    mainContent.style.display = 'block';
+// ====== Password ======
+document.getElementById('submit-pass').addEventListener('click', () => {
+  const pass = document.getElementById('admin-pass-input').value;
+  if (pass === ADMIN_PASS) {
+    isAdmin = true;
+    passPanel.style.display = 'none';
+    main.style.display = 'block';
     adminPanel.style.display = 'block';
   } else {
     alert('パスワードが違います');
-    sessionStorage.setItem('isAdmin','no');
-    passwordPanel.style.display = 'none';
-    mainContent.style.display = 'block';
+    isAdmin = false;
+    passPanel.style.display = 'none';
+    main.style.display = 'block';
     adminPanel.style.display = 'none';
   }
+  renderList();
 });
 
-window.addEventListener('load', renderList);
+window.addEventListener('load', () => renderList());
 </script>
-
 </body>
 </html>
-
